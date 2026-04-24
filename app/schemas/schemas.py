@@ -3,7 +3,7 @@ from typing import Optional
 from datetime import datetime
 from uuid import UUID
 from decimal import Decimal
-from .models import PaymentStatus, PaymentMethod, RefundStatus
+from app.models.models import PaymentStatus, PaymentMethod, RefundStatus
 
 class StandardResponse(BaseModel):
     data: Optional[dict] = None
