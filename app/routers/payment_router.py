@@ -5,7 +5,7 @@ from app.dependencies import get_user_headers
 from app.schemas import StandardResponse, PaymentResponse, PaymentCreate, RefundCreate, RefundResponse
 from app.services import payment_service
 from app.events.publisher import publish_event
-from app.models import PaymentStatus
+from app.models.models import PaymentStatus
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
