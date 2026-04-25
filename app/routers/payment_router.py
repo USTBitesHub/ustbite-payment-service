@@ -43,17 +43,19 @@ async def async_process_payment(payment_id: str, db: AsyncSession):
 
 @router.post("", response_model=StandardResponse)
 async def init_payment(payload: PaymentCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db), headers: dict = Depends(get_user_headers)):
+    import traceback as _tb
     user_id = headers.get("user_id")
     if not user_id:
         raise HTTPException(status_code=401, detail="Missing user_id header")
 
-    payment = await payment_service.create_payment(db, user_id, payload)
-
-    resp = PaymentResponse.model_validate(payment).model_dump(mode="json")
-    # Attach public Razorpay key so frontend can open checkout without extra env config
-    resp["razorpay_key_id"] = settings.razorpay_key_id or None
-
-    return format_response(resp, "Payment initiated")
+    try:
+        payment = await payment_service.create_payment(db, user_id, payload)
+        resp = PaymentResponse.model_validate(payment).model_dump(mode="json")
+        resp["razorpay_key_id"] = settings.razorpay_key_id or None
+        return format_response(resp, "Payment initiated")
+    except Exception as e:
+        print(f"[ERROR] init_payment failed: {e}\n{_tb.format_exc()}", flush=True)
+        raise
 
 @router.get("/{id}", response_model=StandardResponse)
 async def get_payment(id: str, db: AsyncSession = Depends(get_db)):

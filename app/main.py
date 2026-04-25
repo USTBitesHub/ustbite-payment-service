@@ -6,6 +6,7 @@ import json
 import time
 import uuid
 import asyncio
+import traceback
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, Counter, Histogram
 from app.config import settings
 
@@ -45,6 +46,7 @@ async def logging_middleware(request: Request, call_next):
         status_code = response.status_code
     except Exception as e:
         status_code = 500
+        logging.error(f"Unhandled exception in {request.method} {request.url.path}: {e}\n{traceback.format_exc()}")
         response = JSONResponse(status_code=500, content={"message": "Internal Server Error"})
         
     duration = (time.time() - start) * 1000
