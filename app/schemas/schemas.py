@@ -36,8 +36,15 @@ class PaymentResponse(BaseModel):
     method: PaymentMethod
     provider_reference: Optional[str]
     failure_reason: Optional[str]
+    razorpay_order_id: Optional[str] = None
+    razorpay_key_id: Optional[str] = None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+class PaymentVerify(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
 
 class RefundResponse(BaseModel):
     id: UUID

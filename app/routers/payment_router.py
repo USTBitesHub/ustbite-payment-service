@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Header, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_user_headers
-from app.schemas import StandardResponse, PaymentResponse, PaymentCreate, RefundCreate, RefundResponse
+from app.schemas import StandardResponse, PaymentResponse, PaymentCreate, PaymentVerify, RefundCreate, RefundResponse
+from app.config import settings
 from app.services import payment_service
 from app.events.publisher import publish_event
 from app.models.models import PaymentStatus
@@ -45,12 +46,14 @@ async def init_payment(payload: PaymentCreate, background_tasks: BackgroundTasks
     user_id = headers.get("user_id")
     if not user_id:
         raise HTTPException(status_code=401, detail="Missing user_id header")
-    
+
     payment = await payment_service.create_payment(db, user_id, payload)
-    # Background simulate processing
-    background_tasks.add_task(async_process_payment, str(payment.id), db)
-    
-    return format_response(PaymentResponse.model_validate(payment).model_dump(mode="json"), "Payment initiated")
+
+    resp = PaymentResponse.model_validate(payment).model_dump(mode="json")
+    # Attach public Razorpay key so frontend can open checkout without extra env config
+    resp["razorpay_key_id"] = settings.razorpay_key_id or None
+
+    return format_response(resp, "Payment initiated")
 
 @router.get("/{id}", response_model=StandardResponse)
 async def get_payment(id: str, db: AsyncSession = Depends(get_db)):
@@ -65,6 +68,30 @@ async def get_payment_for_order(order_id: str, db: AsyncSession = Depends(get_db
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     return format_response(PaymentResponse.model_validate(payment).model_dump(mode="json"))
+
+@router.post("/verify", response_model=StandardResponse)
+async def verify_payment(payload: PaymentVerify, db: AsyncSession = Depends(get_db)):
+    payment = await payment_service.verify_razorpay_payment(
+        db,
+        payload.razorpay_order_id,
+        payload.razorpay_payment_id,
+        payload.razorpay_signature,
+    )
+    if not payment:
+        raise HTTPException(status_code=400, detail="Payment verification failed — invalid signature")
+
+    try:
+        from app.events.publisher import publish_event
+        await publish_event("payment.success", {
+            "payment_id": str(payment.id),
+            "order_id": str(payment.order_id),
+            "user_id": str(payment.user_id),
+            "amount": float(payment.amount),
+        })
+    except Exception as e:
+        print(f"[warn] publish_event payment.success failed: {e}")
+
+    return format_response(PaymentResponse.model_validate(payment).model_dump(mode="json"), "Payment verified")
 
 @router.post("/{id}/refund", response_model=StandardResponse)
 async def refund_payment(id: str, payload: RefundCreate, db: AsyncSession = Depends(get_db)):

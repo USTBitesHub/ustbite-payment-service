@@ -32,6 +32,7 @@ class Payment(Base):
     method = Column(Enum(PaymentMethod), nullable=False)
     provider_reference = Column(String)
     failure_reason = Column(String)
+    razorpay_order_id = Column(String)
     user_email = Column(String)
     user_name = Column(String)
     restaurant_name = Column(String)
