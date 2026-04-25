@@ -50,6 +50,25 @@ async def init_payment(payload: PaymentCreate, background_tasks: BackgroundTasks
 
     try:
         payment = await payment_service.create_payment(db, user_id, payload)
+
+        if payment.status.value == "SUCCESS":
+            try:
+                await publish_event("payment.success", {
+                    "payment_id": str(payment.id),
+                    "order_id": str(payment.order_id),
+                    "user_id": str(payment.user_id),
+                    "amount": float(payment.amount),
+                    "user_email": payment.user_email,
+                    "user_name": payment.user_name,
+                    "restaurant_name": payment.restaurant_name,
+                    "items": payment.items,
+                    "delivery_floor": payment.delivery_floor,
+                    "delivery_wing": payment.delivery_wing,
+                    "estimated_minutes": payment.estimated_minutes,
+                })
+            except Exception as pub_err:
+                print(f"[warn] publish payment.success (COD) failed: {pub_err}", flush=True)
+
         resp = PaymentResponse.model_validate(payment).model_dump(mode="json")
         resp["razorpay_key_id"] = settings.razorpay_key_id or None
         return format_response(resp, "Payment initiated")
@@ -83,12 +102,18 @@ async def verify_payment(payload: PaymentVerify, db: AsyncSession = Depends(get_
         raise HTTPException(status_code=400, detail="Payment verification failed — invalid signature")
 
     try:
-        from app.events.publisher import publish_event
         await publish_event("payment.success", {
             "payment_id": str(payment.id),
             "order_id": str(payment.order_id),
             "user_id": str(payment.user_id),
             "amount": float(payment.amount),
+            "user_email": payment.user_email,
+            "user_name": payment.user_name,
+            "restaurant_name": payment.restaurant_name,
+            "items": payment.items,
+            "delivery_floor": payment.delivery_floor,
+            "delivery_wing": payment.delivery_wing,
+            "estimated_minutes": payment.estimated_minutes,
         })
     except Exception as e:
         print(f"[warn] publish_event payment.success failed: {e}")
